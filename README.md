@@ -1,4 +1,4 @@
-🎯 HexBounties Skript
+# 🎯 HexBounties Skript
 
 A fully-featured bounty system for Minecraft servers using the Skript plugin. Players can place PvP or PvE bounties on other players, or place mob bounties on hostile mobs like zombies or creepers. Includes a bounty GUI, compass tracking, click-to-track system, and auto-expiring bounties.
 
