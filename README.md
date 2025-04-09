@@ -94,11 +94,18 @@ Suggest it and we’ll expand HexBounties even more!
 
 ---
 
-🔗 Created by: aponder.dev
 
 ## 💖 Donation
 
-If you find HexBounties useful and would like to support its development, consider making a donation. Your support helps improve and maintain the project.
+If you find this simulator helpful or fun, please consider supporting development:
 
-[Donate on Ko-fi](https://ko-fi.com/wazupbutrcup)  
-[Donate on PayPal](https://www.paypal.com/donate/?business=6TUCF33LPY9K2&no_recurring=0&item_name=Development+and+Coding+Features&currency_code=USD)
+[💸 Donate via PayPal](https://www.paypal.com/donate/?business=6TUCF33LPY9K2&no_recurring=0&item_name=Development+and+Coding+Features&currency_code=USD)
+
+---
+
+## 📬 Contact
+
+Reach out with questions or feedback:  
+✉️ [aponder.dev](mailto:Anthony@aponder.dev)
+
+---
