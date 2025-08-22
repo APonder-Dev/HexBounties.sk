@@ -1,9 +1,14 @@
+# ┌──────────────────────────────────────────┐
+# │     HexBounties.sk — v1.0 by APonder     │
+# └──────────────────────────────────────────┘
+
 options:
     display-prefix: <gradient:#f7941d:#e74c3c>[HexBounties]</gradient> &7> 
     decay-time: 10 minutes
     min-bounty: 50
     use-global-bounty-type: false # true = force type, false = player chooses
     pvp-bounty-type: pvp # used only if global mode is enabled
+    allow-anonymous-bounties: true
 
 variables:
     {bounty::%uuid%::amount} = 0
@@ -11,181 +16,16 @@ variables:
     {bounty::%uuid%::expires} = 0
     {bounty::%uuid%::type} = "" # "pvp" or "pve"
     {tracking::%player%} = ""
+    {tracking::%player%::enabled} = false
     {mobbounty::<mob-type>::amount}
     {mobbounty::<mob-type>::expires}
     {mobbounty::<mob-type>::placedby}
+    {bountycooldown::%uuid%} = 0
+    {bountylog::*} = ""
 
-# Set player bounty
-command /bounty <player> <number> [<text>]:
-    permission: bounty.set
-    permission: bounty.*
-    permission message: &cYou don't have permission to set bounties!
-    trigger:
-        if player is arg-1:
-            send "{@display-prefix} &cYou can't bounty yourself!"
-            stop
-        if arg-2 < {@min-bounty}:
-            send "{@display-prefix} &cMinimum bounty is $%{@min-bounty}%!"
-            stop
-        if player's balance < arg-2:
-            send "{@display-prefix} &cInsufficient funds!"
-            stop
-
-        if {@use-global-bounty-type} is true:
-            set {_type} to {@pvp-bounty-type}
-        else:
-            if arg-3 is not "pvp" and arg-3 is not "pve":
-                send "{@display-prefix} &cInvalid type! Use &epvp &cor &epve"
-                stop
-            set {_type} to arg-3
-
-        remove arg-2 from player's balance
-        set {bounty::%arg-1's uuid%::amount} to arg-2
-        set {bounty::%arg-1's uuid%::placedby} to player's name
-        set {bounty::%arg-1's uuid%::expires} to now + {@decay-time}
-        set {bounty::%arg-1's uuid%::type} to {_type}
-        broadcast "{@display-prefix} &6%player% &eplaced a &a$%arg-2% &ebounty on &c%arg-1% &7[%{_type}%]&e!"
-
-# Set mob bounty
-command /bounty mob <text> <number>:
-    permission: bounty.set
-    permission: bounty.*
-    trigger:
-        set {_type} to arg-1 parsed as lowercase
-        if arg-2 < {@min-bounty}:
-            send "{@display-prefix} &cMinimum bounty is $%{@min-bounty}%!"
-            stop
-        if player's balance < arg-2:
-            send "{@display-prefix} &cInsufficient funds!"
-            stop
-        if {_type} is not a living entity type:
-            send "{@display-prefix} &cInvalid mob type. Try 'zombie', 'skeleton', 'creeper', etc."
-            stop
-
-        remove arg-2 from player's balance
-        set {mobbounty::%{_type}%::amount} to arg-2
-        set {mobbounty::%{_type}%::expires} to now + {@decay-time}
-        set {mobbounty::%{_type}%::placedby} to player's name
-        broadcast "{@display-prefix} &6%player% &eplaced a &a$%arg-2% &ebounty on &c%{_type}%&e!"
-
-# Player kill bounty
-on death of player:
-    attacker is a player
-    set {_uuid} to victim's uuid
-    if {bounty::%{_uuid}%::amount} > 0:
-        set {_reward} to {bounty::%{_uuid}%::amount}
-        add {_reward} to attacker's balance
-        send "{@display-prefix} &aYou claimed $%{_reward}% for killing %victim%!" to attacker
-        broadcast "{@display-prefix} &6%attacker% &eclaimed the &a$%{_reward}% &ebounty on &c%victim%&e!"
-        delete {bounty::%{_uuid}%::*}
-
-# Mob kill bounty
-on death of entity:
-    attacker is a player
-    set {_type} to type of victim
-    set {_bounty} to {mobbounty::%{_type}%::amount}
-    if {_bounty} > 0:
-        add {_bounty} to attacker’s balance
-        send "{@display-prefix} &aYou claimed $%{_bounty}% for killing a %{_type}%!" to attacker
-        broadcast "{@display-prefix} &6%attacker% &eclaimed a mob bounty on &c%{_type}%!"
-        delete {mobbounty::%{_type}%::*}
-
-# Auto-expire bounties
-every 1 minute:
-    loop {bounty::*::amount}:
-        set {_uuid} to loop-index-1
-        if {bounty::%{_uuid}%::expires} < now:
-            broadcast "{@display-prefix} &7The bounty on &c%player with uuid {_uuid}% &7has expired!"
-            delete {bounty::%{_uuid}%::*}
-
-    loop {mobbounty::*::amount}:
-        set {_mob} to loop-index-1
-        if {mobbounty::%{_mob}%::expires} < now:
-            broadcast "{@display-prefix} &7The mob bounty on &c%{_mob}% &7has expired!"
-            delete {mobbounty::%{_mob}%::*}
-
-# GUI for player bounties
-command /bounties [<text>]:
-    trigger:
-        set {_filter} to arg-1
-        if {_filter} is not "pvp" and {_filter} is not "pve":
-            set {_filter} to "all"
-
-        open virtual chest inventory with size 3 named "&6Bounties (%{_filter}%)" to player
-        set {_slot} to 0
-
-        loop {bounty::*::amount}:
-            set {_uuid} to loop-index-1
-            if {_filter} is not "all" and {bounty::%{_uuid}%::type} is not {_filter}:
-                loop next
-
-            set {_name} to player with uuid {_uuid}
-            set {_expires} to difference between now and {bounty::%{_uuid}%::expires}
-            set {_type} to {bounty::%{_uuid}%::type}
-            set {_item} to skull of {_name}
-            set name of {_item} to "&c%{_name}% &7[%{_type}%]"
-            set lore of {_item} to "&eBounty: &a$%{bounty::%{_uuid}%::amount}%||&7Expires in: %{_expires}%||&8Click to track"
-            set slot {_slot} of player’s current inventory to {_item}
-            add 1 to {_slot}
-
-# GUI for mob bounties
-command /bounties mobs:
-    trigger:
-        open virtual chest inventory with size 3 named "&6Mob Bounties" to player
-        set {_slot} to 0
-
-        loop {mobbounty::*::amount}:
-            set {_mob} to loop-index-1
-            set {_amt} to loop-value
-            set {_exp} to difference between now and {mobbounty::%{_mob}%::expires}
-            set {_item} to 1 of bone
-            set name of {_item} to "&c%{_mob}%"
-            set lore of {_item} to "&eBounty: &a$%{_amt}%||&7Expires in %{_exp}%"
-            set slot {_slot} of player’s current inventory to {_item}
-            add 1 to {_slot}
-
-# Track selected bounty target
-on inventory click:
-    name of event-inventory contains "Bounties":
-        cancel event
-        if clicked item is a skull:
-            set {_target} to name of clicked item parsed between "&c" and " &7"
-            if {_target} is set:
-                set {tracking::%player%} to {_target}
-                close player's inventory
-                send "{@display-prefix} &aNow tracking &c%{_target}%!"
-            else:
-                send "{@display-prefix} &cCould not identify player to track."
-
-# Compass tracking
-every 5 seconds:
-    loop all players:
-        if {tracking::%loop-player%} is set:
-            set {_targetname} to {tracking::%loop-player%}
-            loop all players:
-                if name of loop-player-2 is {_targetname}:
-                    if {tracking::%loop-player%::enabled} is true:
-                    set compass target of loop-player to location of loop-player-2
-
-
-# Toggle compass tracking
-command /bountytrack:
-    permission: bounty.track
-    permission: bounty.*
-    permission message: &cYou don't have permission to use bounty tracking!
-    trigger:
-        if {tracking::%player%::enabled} is not set:
-            set {tracking::%player%::enabled} to true
-        else:
-            set {tracking::%player%::enabled} to not {tracking::%player%::enabled}
-
-        if {tracking::%player%::enabled} is true:
-            send "{@display-prefix} &aBounty compass tracking &2enabled&a."
-        else:
-            send "{@display-prefix} &cBounty compass tracking disabled."
-
-
+# ────────────────────────────────────────────
 # Bounty Tier System
+# ────────────────────────────────────────────
 function getBountyTier(amount: number) :: text:
     if {_amount} >= 1000:
         return "Gold"
@@ -194,10 +34,9 @@ function getBountyTier(amount: number) :: text:
     else:
         return "Bronze"
 
-# Bounty Cooldown
-variables:
-    {bountycooldown::%uuid%} = 0
-
+# ────────────────────────────────────────────
+# Cooldown
+# ────────────────────────────────────────────
 function canPlaceBounty(p: player) :: boolean:
     if {bountycooldown::%uuid of {_p}%} > now:
         return false
@@ -206,11 +45,9 @@ function canPlaceBounty(p: player) :: boolean:
 function bountyCooldownRemaining(p: player) :: timespan:
     return {bountycooldown::%uuid of {_p}%} - now
 
-# Bounty Logs
-variables:
-    {bountylog::*} = ""
-
-# Updated bounty command with cooldown, anonymous, tier, and logging
+# ────────────────────────────────────────────
+# Set player bounty
+# ────────────────────────────────────────────
 command /bounty <player> <number> [<text>] [anon]:
     permission: bounty.set
     permission: bounty.*
@@ -232,11 +69,13 @@ command /bounty <player> <number> [<text>] [anon]:
 
         if {@use-global-bounty-type} is true:
             set {_type} to {@pvp-bounty-type}
-        else:
+        else if arg-3 is set:
             if arg-3 is not "pvp" and arg-3 is not "pve":
                 send "{@display-prefix} &cInvalid type! Use &epvp &cor &epve"
                 stop
             set {_type} to arg-3
+        else:
+            set {_type} to "pvp"
 
         if {@allow-anonymous-bounties} is true and arg-4 is "anon":
             set {_placer} to "Anonymous"
@@ -249,11 +88,163 @@ command /bounty <player> <number> [<text>] [anon]:
         set {bounty::%arg-1's uuid%::expires} to now + {@decay-time}
         set {bounty::%arg-1's uuid%::type} to {_type}
         set {_tier} to getBountyTier(arg-2)
+
         broadcast "{@display-prefix} &6%{_placer}% &eplaced a &a$%arg-2% &e(&6%{_tier}%&e) bounty on &c%arg-1% &7[%{_type}%]&e!"
         set {bountycooldown::%uuid of player%} to now + 2 minutes
         add "&7[%now%] &e%{_placer}% placed &a$%arg-2% &7(%{_tier}%) &eon &c%arg-1%" to {bountylog::*}
 
-# View recent bounty logs
+# ────────────────────────────────────────────
+# Set mob bounty
+# ────────────────────────────────────────────
+command /bounty mob <text> <number>:
+    permission: bounty.set
+    permission: bounty.*
+    trigger:
+        set {_type} to arg-1 parsed as lowercase
+        if arg-2 < {@min-bounty}:
+            send "{@display-prefix} &cMinimum bounty is $%{@min-bounty}%!"
+            stop
+        if player's balance < arg-2:
+            send "{@display-prefix} &cInsufficient funds!"
+            stop
+        if {_type} is not in all entity types:
+            send "{@display-prefix} &cInvalid mob type. Try 'zombie', 'skeleton', 'creeper', etc."
+            stop
+
+        remove arg-2 from player's balance
+        set {mobbounty::%{_type}%::amount} to arg-2
+        set {mobbounty::%{_type}%::expires} to now + {@decay-time}
+        set {mobbounty::%{_type}%::placedby} to player's name
+        broadcast "{@display-prefix} &6%player% &eplaced a &a$%arg-2% &ebounty on &c%{_type}%&e!"
+
+# ────────────────────────────────────────────
+# Player kill bounty
+# ────────────────────────────────────────────
+on death of player:
+    attacker is a player
+    set {_uuid} to victim's uuid
+    if {bounty::%{_uuid}%::amount} > 0:
+        set {_reward} to {bounty::%{_uuid}%::amount}
+        add {_reward} to attacker's balance
+        send "{@display-prefix} &aYou claimed $%{_reward}% for killing %victim%!" to attacker
+        broadcast "{@display-prefix} &6%attacker% &eclaimed the &a$%{_reward}% &ebounty on &c%victim%&e!"
+        delete {bounty::%{_uuid}%::*}
+
+# ────────────────────────────────────────────
+# Mob kill bounty
+# ────────────────────────────────────────────
+on death of entity:
+    attacker is a player
+    set {_type} to type of victim
+    set {_bounty} to {mobbounty::%{_type}%::amount}
+    if {_bounty} > 0:
+        add {_bounty} to attacker's balance
+        send "{@display-prefix} &aYou claimed $%{_bounty}% for killing a %{_type}%!" to attacker
+        broadcast "{@display-prefix} &6%attacker% &eclaimed a mob bounty on &c%{_type}%!"
+        delete {mobbounty::%{_type}%::*}
+
+# ────────────────────────────────────────────
+# Auto-expire bounties
+# ────────────────────────────────────────────
+every 1 minute:
+    loop {bounty::*::amount}:
+        set {_uuid} to replace "bounty::" and "::amount" in loop-index with ""
+        if {bounty::%{_uuid}%::expires} < now:
+            broadcast "{@display-prefix} &7The bounty on &c%player with uuid {_uuid}% &7has expired!"
+            delete {bounty::%{_uuid}%::*}
+
+    loop {mobbounty::*::amount}:
+        set {_mob} to replace "mobbounty::" and "::amount" in loop-index with ""
+        if {mobbounty::%{_mob}%::expires} < now:
+            broadcast "{@display-prefix} &7The mob bounty on &c%{_mob}% &7has expired!"
+            delete {mobbounty::%{_mob}%::*}
+
+# ────────────────────────────────────────────
+# GUI for player bounties
+# ────────────────────────────────────────────
+command /bounties [<text>]:
+    trigger:
+        set {_filter} to arg-1
+        if {_filter} is not "pvp" and {_filter} is not "pve":
+            set {_filter} to "all"
+
+        open virtual chest inventory with size 3 named "&6Bounties (%{_filter}%)" to player
+        set {_slot} to 0
+
+        loop {bounty::*::amount}:
+            set {_uuid} to replace "bounty::" and "::amount" in loop-index with ""
+            if {_filter} is not "all" and {bounty::%{_uuid}%::type} is not {_filter}:
+                loop next
+
+            set {_name} to player with uuid {_uuid}
+            set {_expires} to difference between now and {bounty::%{_uuid}%::expires}
+            set {_type} to {bounty::%{_uuid}%::type}
+            set {_item} to skull of {_name}
+            set name of {_item} to "&c%{_name}% &7[%{_type}%]"
+            set lore of {_item} to "&eBounty: &a$%{bounty::%{_uuid}%::amount}%||&7Expires in: %{_expires}%||&8Click to track"
+            set slot {_slot} of player's current inventory to {_item}
+            add 1 to {_slot}
+
+# ────────────────────────────────────────────
+# GUI for mob bounties
+# ────────────────────────────────────────────
+command /bounties mobs:
+    trigger:
+        open virtual chest inventory with size 3 named "&6Mob Bounties" to player
+        set {_slot} to 0
+
+        loop {mobbounty::*::amount}:
+            set {_mob} to replace "mobbounty::" and "::amount" in loop-index with ""
+            set {_amt} to loop-value
+            set {_exp} to difference between now and {mobbounty::%{_mob}%::expires}
+            set {_item} to 1 of bone
+            set name of {_item} to "&c%{_mob}%"
+            set lore of {_item} to "&eBounty: &a$%{_amt}%||&7Expires in %{_exp}%"
+            set slot {_slot} of player's current inventory to {_item}
+            add 1 to {_slot}
+
+# ────────────────────────────────────────────
+# Track selected bounty target
+# ────────────────────────────────────────────
+on inventory click:
+    name of event-inventory contains "Bounties":
+        cancel event
+        if clicked item is a skull:
+            set {_target} to name of clicked item parsed between "&c" and " &7"
+            if {_target} is set:
+                set {tracking::%player%} to {_target}
+                close player's inventory
+                send "{@display-prefix} &aNow tracking &c%{_target}%!"
+            else:
+                send "{@display-prefix} &cCould not identify player to track."
+
+# ────────────────────────────────────────────
+# Compass tracking
+# ────────────────────────────────────────────
+every 5 seconds:
+    loop all players:
+        if {tracking::%loop-player%} is set:
+            set {_targetname} to {tracking::%loop-player%}
+            loop all players:
+                if name of loop-player-2 is {_targetname}:
+                    if {tracking::%loop-player%::enabled} is true:
+                        set compass target of loop-player to location of loop-player-2
+
+# Toggle compass tracking
+command /bountytrack:
+    permission: bounty.track
+    permission: bounty.*
+    permission message: &cYou don't have permission to use bounty tracking!
+    trigger:
+        set {tracking::%player%::enabled} to not {tracking::%player%::enabled}
+        if {tracking::%player%::enabled} is true:
+            send "{@display-prefix} &aBounty compass tracking &2enabled&a."
+        else:
+            send "{@display-prefix} &cBounty compass tracking disabled."
+
+# ────────────────────────────────────────────
+# Bounty Logs
+# ────────────────────────────────────────────
 command /bountylog:
     permission: bounty.admin
     permission: bounty.*
@@ -262,9 +253,9 @@ command /bountylog:
         loop {bountylog::*} from size of {bountylog::*} - 10 to size of {bountylog::*}:
             send loop-value
 
-
-# PlaceholderAPI Placeholders (via SkBee or skript-placeholders)
-
+# ────────────────────────────────────────────
+# PlaceholderAPI Placeholders
+# ────────────────────────────────────────────
 placeholder "hexbounties_bounty_amount" parsed as player:
     return {bounty::%uuid of {_player}%::amount}
 
@@ -280,7 +271,7 @@ placeholder "hexbounties_most_wanted_name":
     loop {bounty::*::amount}:
         if loop-value > {_max}:
             set {_max} to loop-value
-            set {_top} to player with uuid loop-index-1
+            set {_top} to player with uuid (replace "bounty::" and "::amount" in loop-index with "")
     return {_top}
 
 placeholder "hexbounties_most_wanted_amount":
